@@ -3,12 +3,15 @@ import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useLoginMutation, useLogoutMutation } from "../services/authApi";
+
 import { setCredentials, clearCredentials } from "../slices/authSlice";
-import { LoginCredentials } from "../types/auth.types";
+import type { LoginCredentials } from "../types/auth.types";
 
 export const useAuth = () => {
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const [loginMutation] = useLoginMutation();
   const [logoutMutation] = useLogoutMutation();
 
@@ -17,6 +20,7 @@ export const useAuth = () => {
   );
 
   const login = useCallback(
+
     async (credentials: LoginCredentials) => {
       try {
         const response = await loginMutation(credentials).unwrap();

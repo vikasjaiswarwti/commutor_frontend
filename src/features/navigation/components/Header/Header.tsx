@@ -1,72 +1,50 @@
+// src/features/navigation/components/Header/Header.tsx
+// Refactor Header
 import React from 'react';
-import { Button } from '../../../../shared/components/ui/Button';
-import { Icon } from '../../../../shared/components/ui/Icon';
+import { Icon, Button } from '../../../../shared/components/ui';
 
 import { useNavigation } from '../../hooks/useNavigation';
 
 import { useAuth } from '../../../auth/hooks/useAuth';
+import { useUILibrary } from '../../../../shared/lib/ui-lib/ui-library-context';
 
-import { useMediaQuery } from '../../../../shared/hooks/useMediaQuery';
+interface HeaderProps {
+    style?: React.CSSProperties;
+}
 
-export const Header: React.FC = () => {
-
-    const { toggleSidebar } = useNavigation();
-
+export const Header: React.FC<HeaderProps> = ({ style }) => {
+    const { toggleSidebar, collapsed } = useNavigation();
     const { user, logout } = useAuth();
 
-    const isMobile = useMediaQuery('(max-width: 768px)');
+    const { Flex } = useUILibrary();
 
     return (
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-            <div className="px-4 sm:px-6 lg:px-8 py-4">
-                <div className="flex items-center justify-between">
-                    {/* Left section */}
-                    <div className="flex items-center gap-3">
+        <div style={style} className="bg-green-600 border-b border-gray-200 px-6 py-4">
+            <Flex justify="space-between" align="center">
+                <Flex gap="middle" align="center">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleSidebar}
+                        icon={<Icon name={collapsed ? 'menu-unfold' : 'menu-fold'} size={18} />}
+                    />
+                    <h1 className="text-xl font-semibold text-orange-800">Dashboard</h1>
+                </Flex>
 
-                        {isMobile && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={toggleSidebar}
-                                icon={<Icon name="menu" />}
-                            />
-                        )}
+                <Flex gap="middle" align="center">
+                    <Button variant="ghost" size="sm" icon={<Icon name="bell" size={18} />} />
 
-                        {/* Page title - can be dynamic based on route */}
-                        <h1 className="text-xl font-semibold text-gray-800">
-                            Dashboard
-                        </h1>
-                    </div>
-
-                    {/* Right section */}
-                    <div className="flex items-center gap-4">
-                        {/* Notifications */}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Icon name="bell" />}
-                            className="relative"
-                        >
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                        </Button>
-
-                        {/* User menu */}
-                        <div className="flex items-center gap-3">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-medium text-gray-700">{user?.name || 'User'}</p>
-                                <p className="text-xs text-gray-500">{user?.role || 'Admin'}</p>
-                            </div>
-
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={logout}
-                                icon={<Icon name="logout" />}
-                            />
+                    <Flex gap="small" align="center">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-sm font-medium text-gray-700">
+                                {user?.firstName} {user?.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+                        <Button variant="ghost" size="sm" onClick={logout} icon={<Icon name="logout" size={18} />} />
+                    </Flex>
+                </Flex>
+            </Flex>
+        </div>
     );
 };

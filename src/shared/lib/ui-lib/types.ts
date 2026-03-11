@@ -1,4 +1,5 @@
 import React from "react";
+import type { ReactNode } from "react";
 
 // Abstract component props
 export interface ButtonProps {
@@ -113,15 +114,82 @@ export interface FormItemProps {
   noStyle?: boolean;
 }
 
+// export interface UILibrary {
+//   Button: React.FC<ButtonProps>;
+//   // Input: React.FC<InputProps>;
+//   Input: React.FC<InputProps> & { Password: React.ComponentType<any> };
+//   Card: React.FC<CardProps>;
+//   Modal: React.FC<ModalProps>;
+//   Select: React.FC<SelectProps>;
+//   Table: React.FC<TableProps>;
+//   Icon: React.FC<IconProps>;
+//   Form: React.FC<FormProps>; // New
+//   FormItem: React.FC<FormItemProps>; // New
+// }
+
+// src/shared/lib/ui-lib/types.ts
+// Add LayoutComponents to the main UILibrary interface
 export interface UILibrary {
+  // Form components
   Button: React.FC<ButtonProps>;
-  // Input: React.FC<InputProps>;
   Input: React.FC<InputProps> & { Password: React.ComponentType<any> };
   Card: React.FC<CardProps>;
   Modal: React.FC<ModalProps>;
   Select: React.FC<SelectProps>;
   Table: React.FC<TableProps>;
   Icon: React.FC<IconProps>;
-  Form: React.FC<FormProps>; // New
-  FormItem: React.FC<FormItemProps>; // New
+  Form: React.FC<FormProps>;
+  FormItem: React.FC<FormItemProps>;
+
+  // Layout components - add these
+  Layout: React.FC<{
+    children?: ReactNode;
+    style?: React.CSSProperties;
+    className?: string;
+    hasSider?: boolean;
+  }>;
+  Header: React.FC<{
+    children?: ReactNode;
+    style?: React.CSSProperties;
+    className?: string;
+  }>;
+  Footer: React.FC<{
+    children?: ReactNode;
+    style?: React.CSSProperties;
+    className?: string;
+  }>;
+  Sider: React.FC<{
+    children?: ReactNode;
+    width?: string | number;
+    style?: React.CSSProperties;
+    className?: string;
+    collapsible?: boolean;
+    collapsed?: boolean;
+    onCollapse?: (collapsed: boolean) => void;
+    theme?: "light" | "dark";
+    breakpoint?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+  }>;
+  Content: React.FC<{
+    children?: ReactNode;
+    style?: React.CSSProperties;
+    className?: string;
+  }>;
+  Flex: React.FC<{
+    children?: ReactNode;
+    gap?: string | number;
+    wrap?: boolean | "wrap" | "nowrap" | "wrap-reverse";
+    style?: React.CSSProperties;
+    className?: string;
+    justify?:
+      | "flex-start"
+      | "flex-end"
+      | "center"
+      | "space-between"
+      | "space-around"
+      | "space-evenly";
+    align?: "flex-start" | "flex-end" | "center" | "stretch" | "baseline";
+    direction?: "row" | "column" | "row-reverse" | "column-reverse";
+  }>;
 }
+
+// Remove the separate LayoutComponents interface since it's now in UILibrary

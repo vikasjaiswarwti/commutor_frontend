@@ -1,56 +1,52 @@
-// src/features/navigation/components/Sidebar/Sidebar.tsx
+
 import React from 'react';
 import { SidebarMenu } from './SidebarMenu';
 import { useNavigation } from '../../hooks/useNavigation';
+import { useUILibrary } from '../../../../shared/lib/ui-lib/ui-library-context';
 
-import { Button } from '@/shared/components/ui/Button';
-import { Icon } from '@/shared/components/ui/Icon';
-import { useMediaQuery } from '@/shared/hooks/useMediaQuery';
 
 export const Sidebar: React.FC = () => {
-    const { menuItems, collapsed, toggleSidebar, closeMobileSidebar } = useNavigation();
-    const isMobile = useMediaQuery('(max-width: 768px)');
+    const { menuItems, collapsed, toggleSidebar } = useNavigation();
 
-    if (isMobile && collapsed) {
-        return null;
-    }
+    const { Sider } = useUILibrary(); // Get Sider from UI library
 
     return (
-        <aside
-            className={`
-        h-full bg-white border-r border-gray-200
-        transition-all duration-300
-        ${collapsed ? 'w-20' : 'w-64'}
-        ${isMobile ? 'fixed inset-y-0 left-0 z-50' : ''}
-      `}
+        <Sider
+            width={256}
+            collapsed={collapsed}
+            onCollapse={toggleSidebar}
+            collapsible
+            breakpoint="lg"
+            theme="light"
+            className="h-screen fixed left-0 top-0 bottom-0 overflow-auto"
+            style={{
+                boxShadow: '2px 0 8px 0 rgba(0,0,0,0.05)',
+                zIndex: 100,
+                backgroundColor:'blue'
+            }}
         >
             <div className="flex flex-col h-full">
                 {/* Logo area */}
-                <div className="h-16 flex items-center justify-between px-4 border-b">
-                    {!collapsed && <span className="text-xl font-bold">Admin</span>}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={isMobile ? closeMobileSidebar : toggleSidebar}
-                    >
-                        <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} />
-                    </Button>
-                </div>
+                {/* <div className="h-16 flex items-center px-4 border-b">
+                    {!collapsed ? (
+                        <span className="text-xl font-bold text-blue-600">Admin</span>
+                    ) : (
+                        <span className="text-xl font-bold text-blue-600 mx-auto">A</span>
+                    )}
+                </div> */}
 
                 {/* Menu area */}
-                <nav className="flex-1 overflow-y-auto py-4">
-                    <SidebarMenu items={menuItems} depth={0} />
-                </nav>
+                {/* <nav className="flex-1 overflow-y-auto py-4">
+                    <SidebarMenu items={menuItems} depth={0} collapsed={collapsed} />
+                </nav> */}
 
                 {/* Footer area */}
-                {!collapsed && (
-                    <div className="p-4 border-t">
-                        <div className="text-xs text-gray-500">
-                            Version 1.0.0
-                        </div>
+                {/* {!collapsed && (
+                    <div className="p-4 border-t text-center">
+                        <div className="text-xs text-gray-500">v1.0.0</div>
                     </div>
-                )}
+                )} */}
             </div>
-        </aside>
+        </Sider>
     );
 };

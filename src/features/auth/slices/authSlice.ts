@@ -1,71 +1,76 @@
+// src/features/auth/slices/authSlice.ts
 import { createSlice } from "@reduxjs/toolkit";
-//
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { MenuItem } from "../../../shared/types/menu.types";
 
-export interface NavigationState {
-  items: MenuItem[];
-  flattenedMap: Record<string, MenuItem>;
+import type { User } from "../../../shared/types/user.types";
+
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  collapsed: boolean;
-  mobileOpen: boolean;
 }
 
-const initialState: NavigationState = {
-  items: [],
-  flattenedMap: {},
+const initialState: AuthState = {
+  user: null,
+  token: null,
+  refreshToken: null,
+  isAuthenticated: false,
   isLoading: false,
   error: null,
-  collapsed: false,
-  mobileOpen: false,
 };
 
-// Helper function to flatten menu items for quick lookup
-const flattenMenuItems = (items: MenuItem[]): Record<string, MenuItem> => {
-  const result: Record<string, MenuItem> = {};
-
-  const traverse = (menuItems: MenuItem[]) => {
-    menuItems.forEach((item) => {
-      result[item.menuId] = item;
-      if (item.children?.length) {
-        traverse(item.children);
-      }
-    });
-  };
-
-  traverse(items);
-  return result;
-};
-
-const navigationSlice = createSlice({
-  name: "navigation",
+const authSlice = createSlice({
+  name: "auth",
   initialState,
   reducers: {
-    setMenuItems: (state, action: PayloadAction<MenuItem[]>) => {
-      state.items = action.payload;
-      state.flattenedMap = flattenMenuItems(action.payload);
-    },
-    toggleCollapsed: (state) => {
-      state.collapsed = !state.collapsed;
-    },
-    setMobileOpen: (state, action: PayloadAction<boolean>) => {
-      state.mobileOpen = action.payload;
+    setCredentials: (
+      state,
+      action: PayloadAction<{
+        user: User;
+        token: string;
+        refreshToken?: string;
+      }>,
+    ) => {
+      const { user, token, refreshToken } = action.payload;
+      state.user = user;
+      state.token = token;
+      if (refreshToken) {
+        state.refreshToken = refreshToken;
+      }
+      state.isAuthenticated = true;
+      state.error = null;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
-    setError: (state, action: PayloadAction<string | null>) => {
+    setError: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
+      state.isLoading = false;
+    },
+    updateUser: (state, action: PayloadAction<Partial<User>>) => {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload };
+      }
+    },
+    clearCredentials: (state) => {
+      state.user = null;
+      state.token = null;
+      state.refreshToken = null;
+      state.isAuthenticated = false;
+      state.error = null;
     },
   },
 });
 
 export const {
-  setMenuItems,
-  toggleCollapsed,
-  setMobileOpen,
+  setCredentials,
   setLoading,
   setError,
-} = navigationSlice.actions;
-export default navigationSlice.reducer;
+  updateUser,
+  clearCredentials,
+} = authSlice.actions;
+
+export default authSlice.reducer;
