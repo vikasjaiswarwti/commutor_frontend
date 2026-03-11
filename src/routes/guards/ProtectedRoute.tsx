@@ -1,9 +1,9 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { RootState } from '@/app/store';
-import { ROUTES } from '@/shared/constants/app.constants';
-import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import type { RootState } from '../../app/store';
+import { ROUTES } from '../../shared/constants/app.constants';
+import { LoadingSpinner } from '../../shared/components/ui';
+import { Navigate, useLocation, Outlet } from 'react-router-dom'; // Add Outlet
 
 interface ProtectedRouteProps {
     requiredMenuId?: string;
@@ -11,26 +11,24 @@ interface ProtectedRouteProps {
     fallbackPath?: string;
 }
 
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     requiredMenuId,
     children,
     fallbackPath = ROUTES.UNAUTHORIZED,
 }) => {
     const location = useLocation();
-    const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-    const { flattenedMap, isLoading } = useSelector((state: RootState) => state.navigation);
 
-    // Show loading while menu is being fetched
-    if (isLoading) {
-        return <LoadingSpinner fullScreen />;
-    }
+    const { isAuthenticated = false } = useSelector((state: RootState) => state.auth);
 
-    // Check authentication
+    const { flattenedMap = false, isLoading } = useSelector((state: RootState) => state.navigation);
+
+    if (isLoading) return <LoadingSpinner fullScreen />;
+
     if (!isAuthenticated) {
         return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
     }
 
-    // Check permission if required
     if (requiredMenuId) {
         const menuItem = flattenedMap[requiredMenuId];
         if (!menuItem?.isAssigned) {
@@ -38,5 +36,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         }
     }
 
-    return <>{children}</>;
+    // ARCHITECTURAL FIX: 
+    // If children is passed (static wrapping), render children.
+    // If not, render Outlet (for nested route config).
+
+    return children ? <>{children}</> : <Outlet />;
 };

@@ -1,6 +1,7 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-
-import { MenuItem } from "@/shared/types/menu.types";
+import { createSlice } from "@reduxjs/toolkit";
+//
+import type { PayloadAction } from "@reduxjs/toolkit";
+import type { MenuItem } from "../../../shared/types/menu.types";
 
 export interface NavigationState {
   items: MenuItem[];

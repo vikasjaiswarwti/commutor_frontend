@@ -2,6 +2,7 @@
 import React from 'react';
 import { SidebarMenu } from './SidebarMenu';
 import { useNavigation } from '../../hooks/useNavigation';
+
 import { Button } from '@/shared/components/ui/Button';
 import { Icon } from '@/shared/components/ui/Icon';
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery';

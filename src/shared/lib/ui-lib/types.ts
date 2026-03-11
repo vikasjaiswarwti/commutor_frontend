@@ -3,22 +3,26 @@ import React from "react";
 // Abstract component props
 export interface ButtonProps {
   variant?: "primary" | "secondary" | "outline" | "ghost";
+  type?: "primary" | "default" | "dashed" | "link" | "text";
   size?: "small" | "middle" | "large";
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   loading?: boolean;
   className?: string;
+  block?: boolean;
   htmlType?: "button" | "submit" | "reset";
 }
 
 export interface InputProps {
   value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  // onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange?: (e: any) => void;
   placeholder?: string;
   disabled?: boolean;
   error?: string;
   label?: string;
+  prefix?: React.ReactNode;
   size?: "small" | "middle" | "large";
   type?: string;
   className?: string;
@@ -89,12 +93,35 @@ export interface IconProps {
   onClick?: () => void;
 }
 
+export interface FormProps {
+  children: React.ReactNode;
+  onFinish?: (values: any) => void;
+  onFinishFailed?: (errorInfo: any) => void;
+  layout?: "vertical" | "horizontal" | "inline";
+  initialValues?: any;
+  size?: "small" | "middle" | "large";
+  className?: string;
+}
+
+export interface FormItemProps {
+  name?: string | string[];
+  label?: React.ReactNode;
+  rules?: any[]; // You can type this more strictly based on AntD/MUI needs
+  children: React.ReactNode;
+  valuePropName?: string;
+  className?: string;
+  noStyle?: boolean;
+}
+
 export interface UILibrary {
   Button: React.FC<ButtonProps>;
-  Input: React.FC<InputProps>;
+  // Input: React.FC<InputProps>;
+  Input: React.FC<InputProps> & { Password: React.ComponentType<any> };
   Card: React.FC<CardProps>;
   Modal: React.FC<ModalProps>;
   Select: React.FC<SelectProps>;
   Table: React.FC<TableProps>;
   Icon: React.FC<IconProps>;
+  Form: React.FC<FormProps>; // New
+  FormItem: React.FC<FormItemProps>; // New
 }

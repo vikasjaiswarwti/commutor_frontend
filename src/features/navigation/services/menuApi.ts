@@ -1,6 +1,6 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
-import { baseQuery } from "@/shared/lib/api/baseQuery";
-import { MenuItem } from "@/shared/types/menu.types";
+import { baseQuery } from "../../../shared/lib/api/baseQuery";
+import type { MenuItem } from "../../../shared/types/menu.types";
 
 interface MenuResponse {
   data: MenuItem[];
@@ -12,6 +12,7 @@ export const menuApi = createApi({
   reducerPath: "menuApi",
   baseQuery,
   tagTypes: ["Menu"],
+
   endpoints: (builder) => ({
     getMenu: builder.query<MenuItem[], void>({
       query: () => "/menu",

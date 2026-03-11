@@ -14,6 +14,7 @@ export interface Logger {
 }
 
 export class ConsoleLogger implements Logger {
+  
   constructor(private context: string) {}
 
   debug(message: string, ...args: unknown[]): void {

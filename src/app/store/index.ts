@@ -1,9 +1,11 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { setupListeners } from "@reduxjs/toolkit/query";
-import authReducer from "@/features/auth/slices/authSlice";
-import navigationReducer from "@/features/navigation/slices/navigationSlice";
-import { authApi } from "@/features/auth/services/authApi";
-import { menuApi } from "@/features/navigation/services/menuApi";
+import type { TypedUseSelectorHook } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import authReducer from "../../features/auth/slices/authSlice";
+import navigationReducer from "../../features/navigation/slices/navigationSlice";
+import { authApi } from "../../features/auth/services/authApi";
+import { menuApi } from "../../features/navigation/services/menuApi";
 
 // Configure store with all reducers and middleware
 export const store = configureStore({
@@ -16,6 +18,7 @@ export const store = configureStore({
     [authApi.reducerPath]: authApi.reducer,
     [menuApi.reducerPath]: menuApi.reducer,
   },
+
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
@@ -25,18 +28,17 @@ export const store = configureStore({
     })
       .concat(authApi.middleware)
       .concat(menuApi.middleware),
-  devTools: process.env.NODE_ENV !== "production",
+
+  devTools: false, //process.env.NODE_ENV !== "production",
 });
 
 // Enable refetchOnFocus and refetchOnReconnect behavior
 setupListeners(store.dispatch);
 
 // Infer the `RootState` and `AppDispatch` types from the store itself
+
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
-
-// Custom hooks for using dispatch and selector with types
-import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
 
 export const useAppDispatch: () => AppDispatch = useDispatch;
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;

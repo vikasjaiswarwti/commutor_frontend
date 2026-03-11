@@ -1,40 +1,30 @@
-import React, { Suspense, lazy, ComponentType } from 'react';
-import { useRoutes, RouteObject } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { routeConfig } from './config/routeConfig';
-import { generateDynamicRoutes } from './utils/routeUtils';
-import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
-import { MenuItem } from '@/shared/types/menu.types';
-import { RootState } from '@/app/store';
+import { useMemo, Suspense } from 'react'
+import { useRoutes } from 'react-router-dom'
 
-// Feature module registry for dynamic imports
-const featureModules: Record<string, () => Promise<{ default: ComponentType<any> }>> = {
-    dashboard: () => import('@/features/dashboard/pages/DashboardPage'),
-    users: () => import('@/features/user-management/pages/UserManagementPage'),
-    roles: () => import('@/features/role-management/pages/RoleManagementPage'),
-    permissions: () => import('@/features/permissions/pages/PermissionsPage'),
-    settings: () => import('@/features/settings/pages/SettingsPage'),
-    // Add more as needed
-};
+import { staticRoutes } from './config/routeConfig'
+import { generateDynamicRoutes } from './utils/routeUtils'
 
-export const RouteGenerator: React.FC = () => {
-    const { items: menuItems } = useSelector((state: RootState) => state.navigation);
+import { featureModules } from './utils/featureModules'
 
-    // Generate dynamic routes from menu items
-    const dynamicRoutes = generateDynamicRoutes(menuItems, featureModules);
+import { useNavigation } from '../features/navigation/hooks/useNavigation'
+import { LoadingSpinner } from '../shared/components/ui/LoadingSpinner'
 
-    // Combine static and dynamic routes
-    const allRoutes: RouteObject[] = [...routeConfig, ...dynamicRoutes];
+export const RouteGenerator = () => {
 
-    const element = useRoutes(allRoutes);
+    const { menuItems } = useNavigation()
 
-    if (!element) {
-        return <LoadingSpinner fullScreen />;
-    }
+    const dynamicRoutes = useMemo(() => {
+        if (!menuItems) return []
+        return generateDynamicRoutes(menuItems, featureModules)
+    }, [menuItems])
+
+    const routes = [...staticRoutes, ...dynamicRoutes]
+
+    const element = useRoutes(routes)
 
     return (
-        <Suspense fallback={<LoadingSpinner fullScreen />}>
+        <Suspense fallback={<LoadingSpinner />}>
             {element}
         </Suspense>
-    );
-};
+    )
+}

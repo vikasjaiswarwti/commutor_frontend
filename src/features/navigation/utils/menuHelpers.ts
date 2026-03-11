@@ -1,4 +1,4 @@
-import { MenuItem } from "@/shared/types/menu.types";
+import type { MenuItem } from "../../../shared/types/menu.types";
 
 export const flattenMenu = (items: MenuItem[]): Record<string, MenuItem> => {
   const result: Record<string, MenuItem> = {};

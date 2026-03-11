@@ -1,5 +1,6 @@
 // src/shared/constants/app.constants.ts
 export const APP_NAME = "Admin Dashboard";
+
 export const APP_VERSION = "1.0.0";
 
 export const ROUTES = {

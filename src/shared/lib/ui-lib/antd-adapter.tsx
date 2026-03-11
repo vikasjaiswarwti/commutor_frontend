@@ -6,12 +6,13 @@ import {
     Modal as AntModal,
     Select as AntSelect,
     Table as AntTable,
+    Form as AntForm,
     ConfigProvider
 } from 'antd';
 
 import * as Icons from '@ant-design/icons';
 
-import type { UILibrary, ButtonProps, InputProps, CardProps, ModalProps, SelectProps, TableProps, IconProps } from './types';
+import type { UILibrary, ButtonProps, InputProps, CardProps, ModalProps, SelectProps, TableProps, IconProps, FormProps, FormItemProps } from './types';
 
 // Map variant to Ant Design button type
 const mapVariantToAntType = (variant?: string): 'primary' | 'default' | 'dashed' | 'text' | 'link' => {
@@ -31,9 +32,10 @@ const mapVariantToAntType = (variant?: string): 'primary' | 'default' | 'dashed'
 
 // Ant Design Adapter
 export const AntDUILibrary: UILibrary = {
-    Button: ({ variant = 'primary', size = 'middle', children, onClick, disabled, loading, className, htmlType, ...props }: ButtonProps) => (
+    Button: ({ variant = 'primary', block, size = 'middle', children, onClick, disabled, loading, className, htmlType, ...props }: ButtonProps) => (
         <AntButton
             type={mapVariantToAntType(variant)}
+            block={block}
             size={size}
             onClick={onClick}
             disabled={disabled}
@@ -46,21 +48,27 @@ export const AntDUILibrary: UILibrary = {
         </AntButton>
     ),
 
-    Input: ({ value, onChange, placeholder, disabled, error, label, size = 'middle', type = 'text', className }: InputProps) => (
-        <div className="w-full">
-            {label && <div className="mb-1 text-sm font-medium">{label}</div>}
-            <AntInput
-                value={value}
-                onChange={onChange}
-                placeholder={placeholder}
-                disabled={disabled}
-                size={size}
-                type={type}
-                className={className}
-                status={error ? 'error' : undefined}
-            />
-            {error && <div className="mt-1 text-xs text-red-500">{error}</div>}
-        </div>
+    Input: Object.assign(
+        ({ prefix, error, label, ...props }: InputProps) => (
+            <div className="w-full">
+                {label && <div className="mb-1 text-sm font-medium">{label}</div>}
+                <AntInput
+                    prefix={prefix}
+                    status={error ? 'error' : undefined}
+                    {...props}
+                />
+                {error && <div className="mt-1 text-xs text-red-500">{error}</div>}
+            </div>
+        ),
+        { Password: AntInput.Password } // Attach AntD's Password component
+    ),
+
+    Form: ({ children, ...props }: FormProps) => (
+        <AntForm {...props}>{children}</AntForm>
+    ),
+
+    FormItem: ({ children, ...props }: FormItemProps) => (
+        <AntForm.Item {...props}>{children}</AntForm.Item>
     ),
 
     Card: ({ children, title, className, bordered = true, loading = false }: CardProps) => (

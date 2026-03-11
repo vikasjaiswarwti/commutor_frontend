@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+
 import { MenuItem } from '@/shared/types/menu.types';
 import { Button } from '@/shared/components/ui/Button';
 import { Icon } from '@/shared/components/ui/Icon';
@@ -12,9 +13,13 @@ interface SidebarMenuProps {
 }
 
 export const SidebarMenu: React.FC<SidebarMenuProps> = ({ items, depth }) => {
+
     const navigate = useNavigate();
+    
     const location = useLocation();
+
     const collapsed = useSelector((state: any) => state.navigation.collapsed);
+
     const [openItems, setOpenItems] = useState<Set<string>>(new Set());
 
     const sortedItems = [...items].sort((a, b) => a.orderNo - b.orderNo);
