@@ -8,39 +8,33 @@ import { setMenuItems } from '../features/navigation/slices/navigationSlice';
 
 import { mockMenuData } from '../features/navigation/services/mockMenuData';
 
+
 export const App = () => {
-
   const dispatch = useAppDispatch();
-  const { isLoading, error, refetch, data } = useGetMenuQuery(undefined, {
-    skip: false, // Set to true if you want to skip API calls entirely
-  });
-
-  // Use import.meta.env.MODE instead of process.env.NODE_ENV
   const isDev = import.meta.env.MODE === 'development';
 
+  console.log('isDev', isDev);
+
+  const { isLoading, error, data } = useGetMenuQuery(undefined, {
+    skip: isDev, // ✅ skip API entirely in dev
+  });
+
   useEffect(() => {
-    // If API fails or we're in development, use mock data
-    if (error || isDev) {
+    if (isDev) {
       console.log('Using mock menu data');
       dispatch(setMenuItems(mockMenuData));
     } else if (data) {
       dispatch(setMenuItems(data));
+    } else if (error) {
+      console.error('Menu API failed, falling back to mock');
+      dispatch(setMenuItems(mockMenuData));
     }
-  }, [data, error, dispatch]);
+  }, [data, error, isDev, dispatch]);
 
-  useEffect(() => {
-    // Only refetch if not in development mode
-    if (isDev) {
-      refetch();
-    }
-  }, [refetch]);
-
-  if (error && !isDev) {
-    return <div>Failed to load application</div>;
-  }
-
-  if (isLoading && !isDev) {
-    return <LoadingSpinner fullScreen />;
+  // ✅ In dev, skip loading/error gates entirely
+  if (!isDev) {
+    if (isLoading) return <LoadingSpinner fullScreen />;
+    if (error) return <div>Failed to load application</div>;
   }
 
   return <RouteGenerator />;

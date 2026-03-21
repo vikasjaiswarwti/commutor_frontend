@@ -1,90 +1,57 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
-import { baseQuery } from "@/shared/lib/api/baseQuery";
-import { User } from "@/shared/types/user.types";
+// import { baseQuery } from "../../../shared/lib/api/baseQuery";
 
-interface LoginCredentials {
-  email: string;
-  password: string;
-}
+import { baseQueryWithReauth } from "../../../shared/lib/api/baseQueryWithReauth";
 
-interface LoginResponse {
-  user: User;
-  token: string;
-  refreshToken: string;
-}
-
-interface RegisterCredentials {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-}
+import type { User } from "../../../shared/types/user.types";
+import type {
+  LoginCredentials,
+  LoginResponse,
+  RefreshTokenResponse,
+} from "../types/auth.types";
 
 export const authApi = createApi({
   reducerPath: "authApi",
-  baseQuery,
+  baseQuery: baseQueryWithReauth, // Use the enhanced base query
   tagTypes: ["User"],
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginCredentials>({
       query: (credentials) => ({
-        url: "/auth/login",
+        url: "api/v1/Auth/login",
         method: "POST",
         body: credentials,
       }),
       invalidatesTags: ["User"],
     }),
 
-    register: builder.mutation<LoginResponse, RegisterCredentials>({
-      query: (credentials) => ({
-        url: "/auth/register",
-        method: "POST",
-        body: credentials,
-      }),
-    }),
-
     logout: builder.mutation<void, void>({
       query: () => ({
-        url: "/auth/logout",
+        url: "api/v1/Auth/logout",
         method: "POST",
       }),
     }),
 
-    refreshToken: builder.mutation<{ token: string }, void>({
+    refreshToken: builder.mutation<RefreshTokenResponse, void>({
       query: () => ({
-        url: "/auth/refresh",
+        url: "api/v1/Auth/refresh-token",
         method: "POST",
+        // Don't send refresh token in body if it's in cookies
+        // If it needs to be in body, get it from state
       }),
     }),
 
     getCurrentUser: builder.query<User, void>({
-      query: () => "/auth/me",
+      query: () => "api/v1/Auth/me",
       providesTags: ["User"],
     }),
 
-    forgotPassword: builder.mutation<void, { email: string }>({
-      query: (data) => ({
-        url: "/auth/forgot-password",
-        method: "POST",
-        body: data,
-      }),
-    }),
-
-    resetPassword: builder.mutation<void, { token: string; password: string }>({
-      query: (data) => ({
-        url: "/auth/reset-password",
-        method: "POST",
-        body: data,
-      }),
-    }),
+    // ... other endpoints
   }),
 });
 
 export const {
   useLoginMutation,
-  useRegisterMutation,
   useLogoutMutation,
   useRefreshTokenMutation,
   useGetCurrentUserQuery,
-  useForgotPasswordMutation,
-  useResetPasswordMutation,
 } = authApi;

@@ -1,62 +1,44 @@
 // src/features/navigation/hooks/useNavigation.ts
-import { useCallback, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+// Aligned with navigationSlice (toggleCollapsed, setCollapsed, setMobileOpen)
+// and menuApi (useGetMenuQuery). Single source of truth for navigation state.
+
+import { useCallback } from "react";
+import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useGetMenuQuery } from "../services/menuApi";
 import {
-  setMenuItems,
-  setLoading,
-  setError,
   toggleCollapsed,
+  setCollapsed,
   setMobileOpen,
+  selectMenuItems,
+  selectCollapsed,
+  selectMobileOpen,
 } from "../slices/navigationSlice";
-
-import {
-  filterAssignedMenu,
-  sortMenuByOrder,
-  findMenuItemByPath,
-} from "../utils/menuHelpers";
+import { useAppDispatch } from "../../../app/store";
+import { findMenuItemByPath } from "../utils/menuHelpers";
 
 export const useNavigation = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { data: menuData, isLoading, error } = useGetMenuQuery();
 
-  const { items, collapsed, mobileOpen } = useSelector(
-    (state: any) => state.navigation,
-  );
+  // RTK Query owns the API call — result is also written to Redux in App.tsx
+  const { isLoading, error } = useGetMenuQuery();
 
-  useEffect(() => {
-    if (menuData) {
-      const filtered = filterAssignedMenu(menuData);
-      const sorted = sortMenuByOrder(filtered);
-      dispatch(setMenuItems(sorted));
-    }
-  }, [dispatch, menuData]);
-
-  useEffect(() => {
-    dispatch(setLoading(isLoading));
-  }, [dispatch, isLoading]);
-
-  useEffect(() => {
-    if (error) {
-      dispatch(setError(error.toString()));
-    }
-  }, [dispatch, error]);
-
-  const navigateTo = useCallback(
-    (routeUrl: string) => {
-      const menuItem = findMenuItemByPath(items, routeUrl);
-      if (menuItem?.isAssigned) {
-        navigate(routeUrl);
-      }
-    },
-    [items, navigate],
-  );
+  // Read from Redux state (populated by App.tsx setMenuItems after query resolves)
+  const menuItems = useSelector(selectMenuItems);
+  const collapsed = useSelector(selectCollapsed);
+  const mobileOpen = useSelector(selectMobileOpen);
 
   const toggleSidebar = useCallback(() => {
     dispatch(toggleCollapsed());
   }, [dispatch]);
+
+  const setSidebarCollapsed = useCallback(
+    (value: boolean) => {
+      dispatch(setCollapsed(value));
+    },
+    [dispatch],
+  );
 
   const openMobileSidebar = useCallback(() => {
     dispatch(setMobileOpen(true));
@@ -66,15 +48,24 @@ export const useNavigation = () => {
     dispatch(setMobileOpen(false));
   }, [dispatch]);
 
+  const navigateTo = useCallback(
+    (routeUrl: string) => {
+      const item = findMenuItemByPath(menuItems, routeUrl);
+      if (item?.isAssigned) navigate(routeUrl);
+    },
+    [menuItems, navigate],
+  );
+
   return {
-    menuItems: items,
+    menuItems,
     collapsed,
     mobileOpen,
     isLoading,
     error,
-    navigateTo,
     toggleSidebar,
+    setSidebarCollapsed,
     openMobileSidebar,
     closeMobileSidebar,
+    navigateTo,
   };
 };

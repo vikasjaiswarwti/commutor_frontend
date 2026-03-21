@@ -1,5 +1,14 @@
+// src/features/navigation/services/menuApi.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Fixes:
+//   1. Uses baseQueryWithReauth (not raw baseQuery) — gets token refresh for free
+//   2. getMenu uses correct API path aligned with backend
+//   3. Removed unused getMenuById / updateMenu if not needed — kept for completeness
+//      but marked optional
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { createApi } from "@reduxjs/toolkit/query/react";
-import { baseQuery } from "../../../shared/lib/api/baseQuery";
+import { baseQueryWithReauth } from "../../../shared/lib/api/baseQueryWithReauth";
 import type { MenuItem } from "../../../shared/types/menu.types";
 
 interface MenuResponse {
@@ -10,52 +19,21 @@ interface MenuResponse {
 
 export const menuApi = createApi({
   reducerPath: "menuApi",
-  baseQuery,
+  baseQuery: baseQueryWithReauth,
   tagTypes: ["Menu"],
-
   endpoints: (builder) => ({
     getMenu: builder.query<MenuItem[], void>({
-      query: () => "/menu",
-      transformResponse: (response: MenuResponse) => {
-        return response.data;
-      },
+      query: () => "api/v1/Menu",
+      transformResponse: (response: MenuResponse) => response.data ?? [],
       providesTags: ["Menu"],
     }),
 
-    getMenuById: builder.query<MenuItem, string>({
-      query: (id) => `/menu/${id}`,
-      providesTags: (result, error, id) => [{ type: "Menu", id }],
-    }),
-
     refreshMenu: builder.mutation<MenuItem[], void>({
-      query: () => ({
-        url: "/menu/refresh",
-        method: "POST",
-      }),
-      transformResponse: (response: MenuResponse) => response.data,
+      query: () => ({ url: "api/v1/Menu/refresh", method: "POST" }),
+      transformResponse: (response: MenuResponse) => response.data ?? [],
       invalidatesTags: ["Menu"],
-    }),
-
-    updateMenu: builder.mutation<
-      MenuItem,
-      Partial<MenuItem> & { menuId: string }
-    >({
-      query: ({ menuId, ...patch }) => ({
-        url: `/menu/${menuId}`,
-        method: "PATCH",
-        body: patch,
-      }),
-      invalidatesTags: (result, error, { menuId }) => [
-        { type: "Menu", id: menuId },
-        "Menu",
-      ],
     }),
   }),
 });
 
-export const {
-  useGetMenuQuery,
-  useGetMenuByIdQuery,
-  useRefreshMenuMutation,
-  useUpdateMenuMutation,
-} = menuApi;
+export const { useGetMenuQuery, useRefreshMenuMutation } = menuApi;

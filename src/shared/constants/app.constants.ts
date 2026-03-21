@@ -3,6 +3,8 @@ export const APP_NAME = "Admin Dashboard";
 
 export const APP_VERSION = "1.0.0";
 
+export const API_BASE_URL = "http://192.168.1.60:83/"
+
 export const ROUTES = {
   LOGIN: "/login",
   DASHBOARD: "/dashboard",
@@ -23,3 +25,4 @@ export const BREAKPOINTS = {
   xl: 1280,
   "2xl": 1536,
 } as const;
+

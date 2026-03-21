@@ -1,11 +1,12 @@
 import { lazy } from 'react'
-import { Navigate } from 'react-router-dom'
 import type { RouteObject } from 'react-router-dom'
 import { PublicRoute } from '../guards/PublicRoute'
 import { ROUTES } from '../../shared/constants/app.constants'
 import { MainLayout } from '../../shared/components/layouts/MainLayout/MainLayout'
+import { Navigate } from 'react-router-dom'
 
 const LoginPage = lazy(() => import('../../features/auth/pages/LoginPage'))
+
 const UnauthorizedPage = lazy(() => import('../../features/error/pages/UnauthorizedPage'))
 const NotFoundPage = lazy(() => import('../../features/error/pages/NotFoundPage'))
 
@@ -18,10 +19,6 @@ export const staticRoutes: RouteObject[] = [
         path: ROUTES.LOGIN,
         element: <LoginPage />,
       },
-      {
-        index: true,
-        element: <Navigate to={ROUTES.LOGIN} replace />,
-      },
     ],
   },
   {
@@ -29,7 +26,11 @@ export const staticRoutes: RouteObject[] = [
     element: <PublicRoute />,
     children: [
       {
-        path: '/',
+        index: true,
+        element: <Navigate to={ROUTES.DASHBOARD} replace />,
+      },
+      {
+        path: '/dashboard',
         element: <MainLayout />,
         children: [] // Dynamic routes will be injected here
       }
@@ -39,7 +40,6 @@ export const staticRoutes: RouteObject[] = [
     path: ROUTES.UNAUTHORIZED,
     element: <UnauthorizedPage />,
   },
-
   {
     path: '*',
     element: <NotFoundPage />,

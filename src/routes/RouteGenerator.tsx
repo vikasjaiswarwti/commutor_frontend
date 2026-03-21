@@ -18,9 +18,11 @@ export const RouteGenerator = () => {
         return generateDynamicRoutes(menuItems, featureModules)
     }, [menuItems])
 
-    const routes = [...staticRoutes, ...dynamicRoutes]
+    const routes = [...staticRoutes, ...dynamicRoutes];
 
-    const element = useRoutes(routes)
+    console.log('routes from route generator', routes);
+
+    const element = useRoutes(routes);
 
     return (
         <Suspense fallback={<LoadingSpinner />}>

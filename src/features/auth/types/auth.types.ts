@@ -6,17 +6,31 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface LoginResponse {
+  user: User;
+  token: string;
+  accessToken: string;
+  roles: string[];
+  // refreshToken: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  // refreshToken might come in cookies, not in response body
+}
+
+
+// -------------------------------------------------unused of now
 export interface RegisterCredentials {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
-}
-
-export interface LoginResponse {
-  user: User;
-  token: string;
-  refreshToken: string;
 }
 
 export interface AuthState {
