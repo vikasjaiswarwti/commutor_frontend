@@ -2,30 +2,29 @@
 import type { User } from "../../../shared/types/user.types";
 
 export interface LoginCredentials {
-  email: string;
+  userName: string; // API uses userName, not email
   password: string;
 }
 
 export interface LoginResponse {
   user: User;
-  token: string;
   accessToken: string;
   roles: string[];
-  // refreshToken: string;
+  // refreshToken comes via HttpOnly cookie — NOT in body
 }
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
+  // No refreshToken field — it lives in an HttpOnly cookie
 }
 
 export interface RefreshTokenResponse {
   accessToken: string;
-  // refreshToken might come in cookies, not in response body
+  // New refreshToken rotation (if any) also arrives via Set-Cookie
 }
 
+// ── Unused / future ───────────────────────────────────────────────────────────
 
-// -------------------------------------------------unused of now
 export interface RegisterCredentials {
   email: string;
   password: string;
@@ -35,8 +34,7 @@ export interface RegisterCredentials {
 
 export interface AuthState {
   user: User | null;
-  token: string | null;
-  refreshToken: string | null;
+  accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -48,11 +46,5 @@ export interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
-  refreshToken: () => Promise<string | null>;
   updateUser: (userData: Partial<User>) => void;
-}
-
-export interface TokenResponse {
-  token: string;
-  refreshToken?: string;
 }

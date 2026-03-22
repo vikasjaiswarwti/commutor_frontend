@@ -1,13 +1,11 @@
 // src/features/auth/hooks/useAuth.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Fixes applied:
-//   1. initializeAuth now receives payload (readPersistedTokens) — not a void call
-//   2. Uses typed RootState selector instead of (state: any)
-//   3. isAuthenticated derived from accessToken (consistent with new slice)
-//   4. setError imported correctly (was missing from original import)
-//   5. persistTokens / clearPersistedTokens called here — not inside reducers
-//   6. Replaced token with accessToken / refreshToken to match new slice shape
-//   7. login renamed to handleLogin consistently — export as `login` for API compat
+// Synced with cookie-based refresh token flow:
+//   • Login field is `userName` (not `email`)
+//   • No refreshToken in Redux state — it lives in an HttpOnly cookie
+//   • storeRefreshToken() saves the refresh token value to sessionStorage
+//     so baseQueryWithReauth can send it in the body (your API requires this)
+//   • initializeAuth() bootstraps from localStorage accessToken only
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect } from "react";
@@ -23,80 +21,101 @@ import {
   setError,
   logout as logoutAction,
   initializeAuth,
-  persistTokens,
-  clearPersistedTokens,
-  readPersistedTokens,
+  persistAccessToken,
+  clearPersistedToken,
+  readPersistedToken,
   selectIsAuthenticated,
   selectCurrentUser,
   selectAccessToken,
-  selectRefreshToken,
   selectAuthError,
   selectAuthLoading,
 } from "../slices/authSlice";
+import {
+  storeRefreshToken,
+  clearRefreshToken,
+} from "../../../shared/lib/api/baseQueryWithReauth";
 
 import { useAppDispatch } from "../../../app/store";
-
 import type { LoginCredentials } from "../types/auth.types";
-
 import { ROUTES } from "../../../shared/constants/app.constants";
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  // ── RTK Query mutations ────────────────────────────────────────────────────
+  // ── RTK Query mutations ───────────────────────────────────────────────────
   const [loginMutation, { isLoading: isLoginLoading }] = useLoginMutation();
   const [logoutMutation] = useLogoutMutation();
 
-  // ── Typed selectors (no more `state: any`) ────────────────────────────────
+  // ── Selectors ─────────────────────────────────────────────────────────────
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const accessToken = useSelector(selectAccessToken);
-  const refreshToken = useSelector(selectRefreshToken);
   const error = useSelector(selectAuthError);
   const isSliceLoading = useSelector(selectAuthLoading);
 
-  // ── Bootstrap: hydrate tokens from localStorage on first mount ────────────
-  // This runs once. If tokens exist, dispatch initializeAuth so RTK Query
-  // can immediately use the access token (via baseQueryWithReauth prepareHeaders).
-  // The getCurrentUser query below then re-fetches the user object.
+  // ── Bootstrap: hydrate accessToken from localStorage on first mount ───────
+  // Runs once. If a persisted token exists, put it in Redux so:
+  //   (a) prepareHeaders sends it immediately on any RTK Query call
+  //   (b) useGetCurrentUserQuery below can skip: false and fetch the user
   useEffect(() => {
-    const persisted = readPersistedTokens();
-    if (persisted) {
-      dispatch(initializeAuth(persisted));
+    const token = readPersistedToken();
+    if (token) {
+      dispatch(initializeAuth(token));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — runs once on mount only
+  }, []);
 
-  // ── Re-hydrate user after bootstrap ───────────────────────────────────────
-  // Skip if: no accessToken yet (not logged in / not bootstrapped yet)
-  //          OR user is already in Redux (already fetched)
-  const { isLoading: isUserLoading } = useGetCurrentUserQuery(undefined, {
-    skip: !accessToken || !!user,
-  });
-  // Note: authApi's getCurrentUser endpoint dispatches setCredentials on success
-  // via the onQueryStarted lifecycle — see authApi.ts for that wiring.
+  // ── Re-hydrate user after bootstrap ──────────────────────────────────────
+  // Skips if: no accessToken yet (not logged in) OR user already loaded.
+  const { data: currentUserData, isLoading: isUserLoading } =
+    useGetCurrentUserQuery(undefined, {
+      skip: !accessToken || !!user,
+    });
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-  const login = useCallback(
+  // Wire up: when /me returns, store the user in Redux
+  useEffect(() => {
+    if (currentUserData && accessToken) {
+      dispatch(
+        setCredentials({
+          user: currentUserData,
+          accessToken, // already in state — just keeping setCredentials happy
+        }),
+      );
+    }
+  }, [currentUserData, accessToken, dispatch]);
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  const handleLogin = useCallback(
     async (credentials: LoginCredentials) => {
       try {
         const response = await loginMutation(credentials).unwrap();
+        // response = { user, accessToken, roles }
+        // refreshToken arrived as an HttpOnly cookie via Set-Cookie header
 
-        // 1. Update Redux state
+        // 1. Update Redux
         dispatch(
           setCredentials({
             user: response.user,
             accessToken: response.accessToken,
-            refreshToken: response.refreshToken,
           }),
         );
 
-        // 2. Persist to localStorage (side-effect outside reducer)
-        persistTokens({
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-        });
+        // 2. Persist accessToken to localStorage (survives page reload)
+        persistAccessToken(response.accessToken);
+
+        // 3. If your server ALSO returns the refreshToken value in the body
+        //    (needed because your curl sends it in the body, not just cookie),
+        //    store it in sessionStorage for baseQueryWithReauth to use.
+        //    Check your actual login response — add this field to LoginResponse
+        //    type if present:
+        //
+        //    if ((response as any).refreshToken) {
+        //      storeRefreshToken((response as any).refreshToken);
+        //    }
+        //
+        // If the server reads it ONLY from the cookie (body not needed),
+        // remove the body: line in baseQueryWithReauth and skip this.
 
         navigate(ROUTES.DASHBOARD);
       } catch (err: unknown) {
@@ -104,26 +123,23 @@ export const useAuth = () => {
           (err as { data?: { message?: string } })?.data?.message ||
           "Invalid username or password";
         dispatch(setError(message));
-        throw err; // re-throw so LoginPage can catch if needed
+        throw err;
       }
     },
     [dispatch, loginMutation, navigate],
   );
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-  const logout = useCallback(async () => {
+  // ── Logout ────────────────────────────────────────────────────────────────
+  const handleLogout = useCallback(async () => {
     try {
-      // Best-effort server logout (invalidate refresh token server-side)
+      // Best-effort: tell server to invalidate the refresh token cookie
       await logoutMutation().unwrap();
     } catch {
-      // Even if server logout fails, we clear local state
+      // Even on failure, clear local state
     } finally {
-      // 1. Clear Redux state
       dispatch(logoutAction());
-
-      // 2. Clear localStorage (side-effect outside reducer)
-      clearPersistedTokens();
-
+      clearPersistedToken();
+      clearRefreshToken();
       navigate(ROUTES.LOGIN);
     }
   }, [dispatch, logoutMutation, navigate]);
@@ -134,8 +150,7 @@ export const useAuth = () => {
     isLoading: isLoginLoading || isUserLoading || isSliceLoading,
     error,
     accessToken,
-    refreshToken,
-    login,
-    logout,
+    handleLogin,
+    handleLogout,
   };
 };

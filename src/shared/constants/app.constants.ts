@@ -10,6 +10,7 @@ export const ROUTES = {
   DASHBOARD: "/dashboard",
   UNAUTHORIZED: "/unauthorized",
   NOT_FOUND: "/404",
+  Test : "/user"
 } as const;
 
 export const LOCAL_STORAGE_KEYS = {

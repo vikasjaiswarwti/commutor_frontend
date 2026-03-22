@@ -1,27 +1,22 @@
 // src/features/auth/slices/authSlice.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Fixes applied:
-//   1. Removed direct localStorage writes from reducers (side-effect violation)
-//   2. Added refreshToken to state (required by baseQueryWithReauth mutex flow)
-//   3. setTokens() — called by baseQueryWithReauth after silent refresh
-//   4. logout() — single action that clears everything (replaces clearCredentials)
-//   5. initializeAuth now accepts tokens as payload (no localStorage inside reducer)
-//   6. All localStorage I/O via exported helpers called OUTSIDE reducers
-//   7. isAuthenticated derived via selector from accessToken (not stored as bool)
+// Adapted for cookie-based refresh token flow:
+//   • refreshToken is an HttpOnly cookie — never stored in Redux/localStorage
+//   • Only accessToken is persisted (needed to bootstrap auth & for /me call)
+//   • setTokens() updates only accessToken (refresh token rotation via cookie)
+//   • initializeAuth() bootstraps from persisted accessToken only
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 
 import type { User } from "../../../shared/types/user.types";
-import type { AuthTokens } from "../types/auth.types";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
 interface AuthState {
   user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
+  accessToken: string | null; // refreshToken lives in HttpOnly cookie — not here
   isLoading: boolean;
   error: string | null;
 }
@@ -29,45 +24,38 @@ interface AuthState {
 const initialState: AuthState = {
   user: null,
   accessToken: null,
-  refreshToken: null,
   isLoading: false,
   error: null,
 };
 
-// ── localStorage helpers (called OUTSIDE reducers — no side-effects in Redux) ─
+// ── localStorage helpers ───────────────────────────────────────────────────────
+// Only the accessToken is persisted — the refresh token cookie is handled by
+// the browser automatically (HttpOnly, sent on every request to the API origin).
 
-export const TOKEN_KEYS = {
-  ACCESS: "commutr_access_token",
-  REFRESH: "commutr_refresh_token",
-} as const;
+export const TOKEN_KEY = "commutr_access_token";
 
-export const persistTokens = (tokens: AuthTokens): void => {
+export const persistAccessToken = (accessToken: string): void => {
   try {
-    localStorage.setItem(TOKEN_KEYS.ACCESS, tokens.accessToken);
-    localStorage.setItem(TOKEN_KEYS.REFRESH, tokens.refreshToken);
+    localStorage.setItem(TOKEN_KEY, accessToken);
   } catch {
     // SSR / incognito — silently swallow
   }
 };
 
-export const clearPersistedTokens = (): void => {
+export const clearPersistedToken = (): void => {
   try {
-    localStorage.removeItem(TOKEN_KEYS.ACCESS);
-    localStorage.removeItem(TOKEN_KEYS.REFRESH);
+    localStorage.removeItem(TOKEN_KEY);
   } catch {
     // silently swallow
   }
 };
 
-export const readPersistedTokens = (): AuthTokens | null => {
+export const readPersistedToken = (): string | null => {
   try {
-    const accessToken = localStorage.getItem(TOKEN_KEYS.ACCESS);
-    const refreshToken = localStorage.getItem(TOKEN_KEYS.REFRESH);
-    if (accessToken && refreshToken) return { accessToken, refreshToken };
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
-    // silently swallow
+    return null;
   }
-  return null;
 };
 
 // ── Slice ─────────────────────────────────────────────────────────────────────
@@ -77,63 +65,58 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     /**
-     * setCredentials — called after a successful LOGIN.
-     * Sets user + both tokens in state.
+     * setCredentials — called after a successful LOGIN response.
+     * Stores user + accessToken. RefreshToken arrives as a cookie automatically.
      *
-     * After dispatching, call persistTokens() in your hook/thunk:
-     *   dispatch(setCredentials({ user, accessToken, refreshToken }));
-     *   persistTokens({ accessToken, refreshToken });
+     * After dispatching, call persistAccessToken() in your hook:
+     *   dispatch(setCredentials({ user, accessToken }));
+     *   persistAccessToken(accessToken);
      */
     setCredentials: (
       state,
-      action: PayloadAction<{ user: User } & AuthTokens>,
+      action: PayloadAction<{ user: User; accessToken: string }>,
     ) => {
       state.user = action.payload.user;
       state.accessToken = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
       state.error = null;
       state.isLoading = false;
     },
 
     /**
-     * setTokens — called ONLY by baseQueryWithReauth after a silent refresh.
-     * Updates both tokens without touching the user object.
+     * setTokens — called by baseQueryWithReauth after a silent refresh.
+     * Only updates accessToken; new refresh token cookie is set by server.
      *
-     * After dispatching, call persistTokens() in baseQueryWithReauth:
-     *   api.dispatch(setTokens({ accessToken, refreshToken }));
-     *   persistTokens({ accessToken, refreshToken });
+     * After dispatching, call persistAccessToken() in baseQueryWithReauth:
+     *   api.dispatch(setTokens(newAccessToken));
+     *   persistAccessToken(newAccessToken);
      */
-    setTokens: (state, action: PayloadAction<AuthTokens>) => {
-      state.accessToken = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
+    setTokens: (state, action: PayloadAction<string>) => {
+      state.accessToken = action.payload;
     },
 
     /**
      * logout — clears ALL auth state.
-     * After dispatching, call clearPersistedTokens():
-     *   api.dispatch(logout());
-     *   clearPersistedTokens();
+     * After dispatching, call clearPersistedToken():
+     *   dispatch(logout());
+     *   clearPersistedToken();
      */
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
-      state.refreshToken = null;
       state.error = null;
       state.isLoading = false;
     },
 
     /**
-     * initializeAuth — bootstraps state from persisted tokens on app start.
-     * Read tokens first, then dispatch if found. User is re-fetched via
-     * useGetCurrentUserQuery (skip: !accessToken || !!user).
+     * initializeAuth — bootstraps accessToken from localStorage on app start.
+     * The user object is then re-fetched via useGetCurrentUserQuery.
      *
-     * Usage in App.tsx (once, before routes render):
-     *   const persisted = readPersistedTokens();
-     *   if (persisted) dispatch(initializeAuth(persisted));
+     * Usage (once, before routes render):
+     *   const token = readPersistedToken();
+     *   if (token) dispatch(initializeAuth(token));
      */
-    initializeAuth: (state, action: PayloadAction<AuthTokens>) => {
-      state.accessToken = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
+    initializeAuth: (state, action: PayloadAction<string>) => {
+      state.accessToken = action.payload;
     },
 
     updateUser: (state, action: PayloadAction<Partial<User>>) => {
@@ -175,9 +158,6 @@ export const selectCurrentUser = (state: { auth: AuthState }) =>
 
 export const selectAccessToken = (state: { auth: AuthState }) =>
   state.auth.accessToken;
-
-export const selectRefreshToken = (state: { auth: AuthState }) =>
-  state.auth.refreshToken;
 
 export const selectAuthError = (state: { auth: AuthState }) => state.auth.error;
 

@@ -4,6 +4,7 @@ import { PublicRoute } from '../guards/PublicRoute'
 import { ROUTES } from '../../shared/constants/app.constants'
 import { MainLayout } from '../../shared/components/layouts/MainLayout/MainLayout'
 import { Navigate } from 'react-router-dom'
+import { UserListPage } from '../../features/user-management'
 
 const LoginPage = lazy(() => import('../../features/auth/pages/LoginPage'))
 
@@ -35,6 +36,10 @@ export const staticRoutes: RouteObject[] = [
         children: [] // Dynamic routes will be injected here
       }
     ]
+  },
+  {
+    path: ROUTES.Test,
+    element: <UserListPage />,
   },
   {
     path: ROUTES.UNAUTHORIZED,

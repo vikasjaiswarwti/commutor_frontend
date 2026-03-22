@@ -1,0 +1,166 @@
+# Enterprise Frontend Foundation — Mental Model & Rules
+
+## The One Rule
+**Every new page follows the same pattern. No exceptions.**
+
+```
+Page = ApiStateWrapper + AppTable (or AppForm) + Modal(AppForm) + useApiMutation
+```
+
+You never:
+- Write raw `<Table>` from antd
+- Write raw `<Form>` from antd
+- Handle loading/error/empty states manually
+- Import from `antd` directly in feature code
+
+---
+
+## File Map
+
+```
+shared/
+  types/
+    api-error.types.ts       ← AppError shape (single source of truth)
+  utils/
+    normalizeError.ts        ← Converts ANY error → AppError
+  components/
+    ApiState/
+      ApiStateWrapper.tsx    ← loading skeleton | error+retry | empty state | children
+    AppTable/
+      AppTable.tsx           ← col.* builder + pagination + actions
+    AppForm/
+      AppForm.tsx            ← schema-driven form + server error mapping
+  hooks/
+    useTableState.ts         ← URL-synced pagination/sort/filter state
+    useApiMutation.ts        ← mutation wrapper + toast + normalised error
+```
+
+---
+
+## Adding a New Feature (checklist)
+
+### 1. Create the API slice (copy userApi.ts)
+```ts
+// features/orders/services/orderApi.ts
+export const orderApi = createApi({
+  reducerPath: "orderApi",
+  baseQuery: baseQueryWithReauth,   // ← always this, never raw fetchBaseQuery
+  tagTypes: ["Order"],
+  endpoints: (builder) => ({
+    getOrders: builder.query<PaginatedResponse<Order>, GetOrdersArgs>({ ... }),
+    createOrder: builder.mutation<Order, CreateOrderDto>({ ... }),
+  }),
+});
+```
+
+### 2. Add to rootReducer
+```ts
+[orderApi.reducerPath]: orderApi.reducer,
+```
+
+### 3. Add to store middleware
+```ts
+middleware: (gm) => gm().concat(authApi.middleware, orderApi.middleware, ...),
+```
+
+### 4. Build the page (copy UserListPage.tsx pattern)
+
+---
+
+## Status Badge Convention
+Always define status maps at the feature level:
+```ts
+const ORDER_STATUS_MAP = {
+  pending:   { label: "Pending",   color: "warning"  },
+  confirmed: { label: "Confirmed", color: "processing"},
+  shipped:   { label: "Shipped",   color: "success"  },
+  cancelled: { label: "Cancelled", color: "error"    },
+} as const;
+```
+Then use: `col.status("status", "Status", { map: ORDER_STATUS_MAP })`
+
+---
+
+## Form Schema Convention
+Define field schemas as **const arrays at module level**, not inside components:
+```ts
+// ✅ Good — defined once, reusable
+const ORDER_FORM_FIELDS: FormFieldDef[] = [ ... ];
+
+// ❌ Bad — recreated on every render
+const MyForm = () => {
+  const fields = [ ... ]; // inside component
+};
+```
+
+---
+
+## Error Handling Decision Tree
+
+```
+API call fails
+    │
+    ├── 401 → baseQueryWithReauth handles silently (refresh + retry)
+    │
+    ├── 400/422 → normalizeError gives fieldErrors → AppForm maps them
+    │
+    ├── 403 → ApiStateWrapper shows "No permission" state
+    │
+    ├── 404 → ApiStateWrapper shows "Not found" state
+    │
+    ├── 5xx → ApiStateWrapper shows error + Retry button
+    │
+    └── Network → ApiStateWrapper shows "No internet" + Retry button
+```
+
+---
+
+## Pagination Contract
+Your RTK Query endpoints should return:
+```ts
+{
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+```
+If your backend returns differently, adapt `transformResponse` **only in that endpoint's file**.
+The rest of the system never changes.
+
+---
+
+## Column Builder Reference
+```ts
+col.text("fieldName", "Column Title", { sortable: true })
+col.status("status", "Status", { map: STATUS_MAP })
+col.date("createdAt", "Created")
+col.dateTime("updatedAt", "Last updated", { sortable: true })
+col.money("amount", "Amount", { currency: "INR" })
+col.bool("isActive", "Active", { trueLabel: "Yes", falseLabel: "No" })
+col.actions([
+  { label: "Edit", onClick: openEdit },
+  { label: "Delete", danger: true, confirm: true, onClick: doDelete },
+])
+```
+
+---
+
+## CSS Rules
+- Never write inline colors — use `var(--color-text-primary)`, `var(--color-background-secondary)` etc.
+- Never import from `antd` in feature code — always via `useUILibrary()`
+- Tailwind for spacing/layout only (`p-6`, `flex`, `gap-4`)
+- Status badges: use the StatusMap system, never ad-hoc inline styles per component
+
+---
+
+## What Changes When Backend Changes
+| Backend changes | What you touch |
+|---|---|
+| Field name renames | `transformResponse` in that feature's api.ts |
+| New status values | That feature's STATUS_MAP const |
+| New field validation rules | FormFieldDef `rules` array |
+| Pagination shape changes | `transformResponse` in that feature's api.ts |
+| Auth flow changes | `baseQueryWithReauth.ts` only |
+| Error message format | `normalizeError.ts` extractFieldErrors section |
+| Add new field type | `AppForm.tsx` FieldRenderer switch case |

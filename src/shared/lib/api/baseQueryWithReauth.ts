@@ -1,19 +1,23 @@
 // src/shared/lib/api/baseQueryWithReauth.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// RTK Query base query with silent token refresh guarded by a Mutex.
+// Cookie-based refresh token flow:
 //
-// Problem without mutex:
-//   10 concurrent requests all get 401 → 10 parallel refresh calls →
-//   first one succeeds, the other 9 fail (refresh token already rotated) →
-//   user gets logged out even though their session was valid.
+//   • Login response sets an HttpOnly refresh token cookie automatically.
+//   • When a 401 is hit, we call POST /api/v1/Auth/refresh-token with:
+//       - Authorization: Bearer <expired accessToken>   (in header)
+//       - { refreshToken: "<value>" }                   (in body — from cookie)
 //
-// Solution:
-//   • First 401 acquires the Mutex lock and refreshes.
-//   • All subsequent 401s see the lock is taken, wait for it to release,
-//     then simply retry their original request with the new token in state.
-//   • Only ONE refresh ever happens per expiry cycle.
+//   IMPORTANT: The refresh token value itself is in an HttpOnly cookie, so
+//   JavaScript cannot read it directly. The server must either:
+//     (a) Accept credentials: "include" and read the cookie server-side, OR
+//     (b) Return the refresh token value in the login body so we can store it.
 //
-// Install peer dep: npm install async-mutex
+//   Looking at your curl example, the refresh token IS sent in the request body
+//   (not just via cookie), which means the server must be providing it somewhere
+//   readable. Two strategies are handled below — see STRATEGY comment.
+//
+//   Mutex prevents the thundering-herd problem:
+//     10 concurrent 401s → only 1 refresh call → others wait & retry.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -28,21 +32,58 @@ import type { RootState } from "../../../app/store";
 import {
   setTokens,
   logout,
-  persistTokens,
-  clearPersistedTokens,
+  persistAccessToken,
+  clearPersistedToken,
 } from "../../../features/auth/slices/authSlice";
 
-import type { AuthTokens } from "../../../features/auth/types/auth.types";
+import type { RefreshTokenResponse } from "../../../features/auth/types/auth.types";
 import { API_BASE_URL } from "../../constants/app.constants";
 
-// ── One shared Mutex for the entire app lifetime ──────────────────────────────
-// Module-level singleton — survives hot reloads in dev only if this module
-// is not itself reloaded. In prod this is never an issue.
+// ── STRATEGY ──────────────────────────────────────────────────────────────────
+// Your curl sends refreshToken in the body AND the expired accessToken in the
+// Authorization header. This means the server gave you the refreshToken value
+// somewhere — most likely in the login response body (even if not in the type).
+//
+// We store it in sessionStorage (not Redux) so it's not XSS-accessible via JS
+// bundle analysis, but is still available across the tab session.
+//
+// If your server ONLY reads it from the HttpOnly cookie (no body needed),
+// remove the REFRESH_TOKEN_KEY storage and just use credentials: "include".
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REFRESH_TOKEN_KEY = "commutr_rt"; // sessionStorage — tab-scoped
+
+export const storeRefreshToken = (token: string) => {
+  try {
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
+  } catch {
+    /* noop */
+  }
+};
+
+export const getStoredRefreshToken = (): string | null => {
+  try {
+    return sessionStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const clearRefreshToken = () => {
+  try {
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  } catch {
+    /* noop */
+  }
+};
+
+// ── Mutex — one instance for the entire app lifetime ─────────────────────────
 const refreshMutex = new Mutex();
 
-// ── Base query — attaches Bearer token from Redux state ───────────────────────
+// ── Raw base query — attaches Bearer token from Redux, sends cookies ──────────
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_BASE_URL,
+  credentials: "include", // sends HttpOnly cookies automatically on every request
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth.accessToken;
     if (token) {
@@ -50,57 +91,64 @@ const rawBaseQuery = fetchBaseQuery({
     }
     return headers;
   },
-  // Uncomment if your refresh token is sent as an HttpOnly cookie instead:
-  // credentials: "include",
 });
 
-// ── Authenticated base query with silent refresh ───────────────────────────────
+// ── Authenticated base query with silent refresh ──────────────────────────────
 export const baseQueryWithReauth: BaseQueryFn<
   string | FetchArgs,
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
-  // ── 1. Attempt the request normally ─────────────────────────────────────────
+  // 1. Attempt the request normally
   let result = await rawBaseQuery(args, api, extraOptions);
 
-  // Only intercept 401 — all other errors pass through untouched
+  // Pass through anything that isn't a 401
   if (result.error?.status !== 401) {
     return result;
   }
 
-  // ── 2. Got a 401 — need to refresh ──────────────────────────────────────────
+  // ── 2. Got a 401 ─────────────────────────────────────────────────────────
 
   if (refreshMutex.isLocked()) {
-    // Another request is already refreshing.
-    // Wait until it finishes (lock released), then retry.
-    // By then, setTokens() will have updated the accessToken in Redux,
-    // so rawBaseQuery's prepareHeaders will pick up the new token automatically.
+    // Another concurrent request is already refreshing.
+    // Wait for it to finish, then retry with the new token already in Redux.
     await refreshMutex.waitForUnlock();
     result = await rawBaseQuery(args, api, extraOptions);
     return result;
   }
 
-  // ── 3. We are the first 401 — acquire lock and refresh ──────────────────────
+  // ── 3. We are the first 401 — acquire lock and refresh ───────────────────
   const release = await refreshMutex.acquire();
 
   try {
-    const refreshToken = (api.getState() as RootState).auth.refreshToken;
+    const expiredAccessToken = (api.getState() as RootState).auth.accessToken;
+    const refreshToken = getStoredRefreshToken();
 
-    if (!refreshToken) {
-      // No refresh token stored — session is unrecoverable
+    if (!expiredAccessToken) {
+      // Nothing to refresh with
       api.dispatch(logout());
-      clearPersistedTokens();
+      clearPersistedToken();
+      clearRefreshToken();
       return result;
     }
 
-    // Call the refresh endpoint
-    // If your refresh token is in an HttpOnly cookie, omit `body` and add
-    // `credentials: "include"` to rawBaseQuery above instead.
+    // Build refresh request:
+    //   - Authorization header carries the EXPIRED access token (your API requires this)
+    //   - Body carries the refresh token value
+    //   - credentials: "include" also sends the HttpOnly cookie automatically
     const refreshResult = await rawBaseQuery(
       {
         url: "api/v1/Auth/refresh-token",
         method: "POST",
-        body: { refreshToken },
+        // Include refresh token in body if available (your curl shows this pattern)
+        // If server reads it only from cookie, you can remove the body entirely
+        body: refreshToken ? { refreshToken } : undefined,
+        // Override headers to send the EXPIRED token (rawBaseQuery would send
+        // the same expired token from state anyway — this makes it explicit)
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${expiredAccessToken}`,
+        },
       },
       api,
       extraOptions,
@@ -108,25 +156,28 @@ export const baseQueryWithReauth: BaseQueryFn<
 
     if (refreshResult.data) {
       // ✅ Refresh succeeded
-      const tokens = refreshResult.data as AuthTokens;
+      const { accessToken: newAccessToken } =
+        refreshResult.data as RefreshTokenResponse;
 
-      // Update Redux state (used by all subsequent prepareHeaders calls)
-      api.dispatch(setTokens(tokens));
+      // Update Redux with new access token
+      api.dispatch(setTokens(newAccessToken));
 
-      // Persist new tokens to localStorage (side-effect — outside reducer)
-      persistTokens(tokens);
+      // Persist new access token to localStorage
+      persistAccessToken(newAccessToken);
 
-      // Retry the original request — prepareHeaders now has the new token
+      // Note: if server rotates the refresh token, the new one arrives via
+      // Set-Cookie and is updated automatically by the browser — nothing to do.
+
+      // Retry the original request — prepareHeaders now picks up newAccessToken
       result = await rawBaseQuery(args, api, extraOptions);
     } else {
-      // ❌ Refresh failed (invalid/expired refresh token)
-      // Log the user out and clear everything
+      // ❌ Refresh failed — session is unrecoverable, log out
       api.dispatch(logout());
-      clearPersistedTokens();
+      clearPersistedToken();
+      clearRefreshToken();
     }
   } finally {
-    // CRITICAL: always release, even on throw — otherwise all waiting
-    // requests will deadlock forever.
+    // CRITICAL: always release — even on throw — or waiting requests deadlock.
     release();
   }
 

@@ -6,6 +6,7 @@ import authReducer from "../../features/auth/slices/authSlice";
 import navigationReducer from "../../features/navigation/slices/navigationSlice";
 import { authApi } from "../../features/auth/services/authApi";
 import { menuApi } from "../../features/navigation/services/menuApi";
+import { userApi } from "../../features/user-management";
 
 // Configure store with all reducers and middleware
 export const store = configureStore({
@@ -13,10 +14,12 @@ export const store = configureStore({
     // Feature slices
     auth: authReducer,
     navigation: navigationReducer,
+    // userApi
 
     // API reducers
     [authApi.reducerPath]: authApi.reducer,
     [menuApi.reducerPath]: menuApi.reducer,
+    [userApi.reducerPath]: userApi.reducer,
   },
 
   middleware: (getDefaultMiddleware) =>
@@ -27,7 +30,8 @@ export const store = configureStore({
       },
     })
       .concat(authApi.middleware)
-      .concat(menuApi.middleware),
+      .concat(menuApi.middleware)
+      .concat(userApi.middleware), // ← ADD,
 
   devTools: false, //process.env.NODE_ENV !== "production",
 });
