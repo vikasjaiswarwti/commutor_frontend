@@ -1,13 +1,3 @@
-// src/features/auth/hooks/useAuth.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Synced with cookie-based refresh token flow:
-//   • Login field is `userName` (not `email`)
-//   • No refreshToken in Redux state — it lives in an HttpOnly cookie
-//   • storeRefreshToken() saves the refresh token value to sessionStorage
-//     so baseQueryWithReauth can send it in the body (your API requires this)
-//   • initializeAuth() bootstraps from localStorage accessToken only
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useCallback, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -30,10 +20,7 @@ import {
   selectAuthError,
   selectAuthLoading,
 } from "../slices/authSlice";
-import {
-  storeRefreshToken,
-  clearRefreshToken,
-} from "../../../shared/lib/api/baseQueryWithReauth";
+// import { clearRefreshToken } from "../../../shared/lib/api/baseQueryWithReauth";
 
 import { useAppDispatch } from "../../../app/store";
 import type { LoginCredentials } from "../types/auth.types";
@@ -55,9 +42,9 @@ export const useAuth = () => {
   const isSliceLoading = useSelector(selectAuthLoading);
 
   // ── Bootstrap: hydrate accessToken from localStorage on first mount ───────
-  // Runs once. If a persisted token exists, put it in Redux so:
-  //   (a) prepareHeaders sends it immediately on any RTK Query call
-  //   (b) useGetCurrentUserQuery below can skip: false and fetch the user
+  // Runs once on app start. Puts the persisted token into Redux so:
+  //   (a) prepareHeaders sends it on the very first RTK Query call
+  //   (b) useGetCurrentUserQuery below can skip: false and re-fetch the user
   useEffect(() => {
     const token = readPersistedToken();
     if (token) {
@@ -66,20 +53,20 @@ export const useAuth = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Re-hydrate user after bootstrap ──────────────────────────────────────
-  // Skips if: no accessToken yet (not logged in) OR user already loaded.
+  // ── Re-hydrate user after bootstrap (page reload) ─────────────────────────
+  // Skips when: no accessToken yet OR user already loaded in Redux
   const { data: currentUserData, isLoading: isUserLoading } =
     useGetCurrentUserQuery(undefined, {
       skip: !accessToken || !!user,
     });
 
-  // Wire up: when /me returns, store the user in Redux
+  // When /me returns data, push user into Redux
   useEffect(() => {
     if (currentUserData && accessToken) {
       dispatch(
         setCredentials({
           user: currentUserData,
-          accessToken, // already in state — just keeping setCredentials happy
+          accessToken,
         }),
       );
     }
@@ -91,9 +78,10 @@ export const useAuth = () => {
       try {
         const response = await loginMutation(credentials).unwrap();
         // response = { user, accessToken, roles }
-        // refreshToken arrived as an HttpOnly cookie via Set-Cookie header
+        // refreshToken arrives ONLY as an HttpOnly Set-Cookie header — invisible to JS
+        // Browser stores it automatically and will send it on future requests
 
-        // 1. Update Redux
+        // 1. Push user + accessToken into Redux
         dispatch(
           setCredentials({
             user: response.user,
@@ -101,22 +89,10 @@ export const useAuth = () => {
           }),
         );
 
-        // 2. Persist accessToken to localStorage (survives page reload)
+        // 2. Persist accessToken to localStorage so page reloads don't log out
         persistAccessToken(response.accessToken);
 
-        // 3. If your server ALSO returns the refreshToken value in the body
-        //    (needed because your curl sends it in the body, not just cookie),
-        //    store it in sessionStorage for baseQueryWithReauth to use.
-        //    Check your actual login response — add this field to LoginResponse
-        //    type if present:
-        //
-        //    if ((response as any).refreshToken) {
-        //      storeRefreshToken((response as any).refreshToken);
-        //    }
-        //
-        // If the server reads it ONLY from the cookie (body not needed),
-        // remove the body: line in baseQueryWithReauth and skip this.
-
+        // 3. Navigate to dashboard
         navigate(ROUTES.DASHBOARD);
       } catch (err: unknown) {
         const message =
@@ -132,14 +108,14 @@ export const useAuth = () => {
   // ── Logout ────────────────────────────────────────────────────────────────
   const handleLogout = useCallback(async () => {
     try {
-      // Best-effort: tell server to invalidate the refresh token cookie
+      // Tell server to invalidate + clear the refreshToken cookie via Set-Cookie
       await logoutMutation().unwrap();
     } catch {
-      // Even on failure, clear local state
+      // Even if server call fails, clear local state
     } finally {
       dispatch(logoutAction());
       clearPersistedToken();
-      clearRefreshToken();
+      // clearRefreshToken(); // noop — just for compatibility
       navigate(ROUTES.LOGIN);
     }
   }, [dispatch, logoutMutation, navigate]);
